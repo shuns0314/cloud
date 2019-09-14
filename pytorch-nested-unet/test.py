@@ -28,7 +28,6 @@ import torchvision
 from torchvision import datasets, models, transforms
 
 from dataset import Dataset
-
 import archs
 from metrics import dice_coef, batch_iou, mean_iou, iou_score
 import losses

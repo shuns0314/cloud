@@ -5,23 +5,16 @@ import argparse
 from glob import glob
 from collections import OrderedDict
 
-import numpy as np
+import joblib
+import pandas as pd
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-from skimage.io import imread
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 import torch.optim as optim
-from torch.optim import lr_scheduler
-from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
-import torchvision
-from torchvision import datasets, models, transforms
 
 from dataset import Dataset
-
 import archs
 from metrics import dice_coef, batch_iou, mean_iou, iou_score
 import losses
@@ -36,50 +29,48 @@ loss_names.append('BCEWithLogitsLoss')
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--name', default=None,
+    parser.add_argument('--name',
+                        default=None,
                         help='model name: (default: arch+timestamp)')
-    parser.add_argument('--arch', '-a', metavar='ARCH', default='NestedUNet',
-                        choices=arch_names,
-                        help='model architecture: ' +
-                            ' | '.join(arch_names) +
-                            ' (default: NestedUNet)')
-    parser.add_argument('--deepsupervision', default=False, type=str2bool)
-    parser.add_argument('--dataset', default=None,
-                        help='dataset name')
-    parser.add_argument('--input-channels', default=3, type=int,
-                        help='input channels')
-    parser.add_argument('--image-ext', default='png',
-                        help='image file extension')
-    parser.add_argument('--mask-ext', default='png',
-                        help='mask file extension')
-    parser.add_argument('--aug', default=False, type=str2bool)
-    parser.add_argument('--loss', default='BCEDiceLoss',
-                        choices=loss_names,
-                        help='loss: ' +
-                            ' | '.join(loss_names) +
-                            ' (default: BCEDiceLoss)')
-    parser.add_argument('--epochs', default=10000, type=int, metavar='N',
+    parser.add_argument('--arch', '-a',
+                        metavar='ARCH', default='NestedUNet', choices=arch_names,
+                        help='model architecture: '+' | '.join(arch_names)+' (default: NestedUNet)')
+    parser.add_argument('--deepsupervision',
+                        default=False, type=str2bool)
+    parser.add_argument('--img_dataset',
+                        default=None, help='image dataset name')
+    parser.add_argument('--msk_dataset',
+                        default=None, help='mask dataset name')                 
+    parser.add_argument('--input-channels',
+                        default=3, type=int, help='input channels')
+    parser.add_argument('--aug',
+                        default=False, type=str2bool)
+    parser.add_argument('--loss',
+                        default='BCEDiceLoss', choices=loss_names,
+                        help='loss: ' + ' | '.join(loss_names) + ' (default: BCEDiceLoss)')
+    parser.add_argument('--epochs',
+                        default=10000, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--early-stop', default=20, type=int,
+    parser.add_argument('--early-stop',
+                        default=20, type=int,
                         metavar='N', help='early stopping (default: 20)')
-    parser.add_argument('-b', '--batch-size', default=16, type=int,
+    parser.add_argument('-b', '--batch-size',
+                        default=16, type=int,
                         metavar='N', help='mini-batch size (default: 16)')
-    parser.add_argument('--optimizer', default='Adam',
-                        choices=['Adam', 'SGD'],
-                        help='loss: ' +
-                            ' | '.join(['Adam', 'SGD']) +
-                            ' (default: Adam)')
-    parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float,
+    parser.add_argument('--optimizer',
+                        default='Adam', choices=['Adam', 'SGD'],
+                        help='loss: ' + ' | '.join(['Adam', 'SGD']) + ' (default: Adam)')
+    parser.add_argument('--lr', '--learning-rate',
+                        default=3e-4, type=float,
                         metavar='LR', help='initial learning rate')
-    parser.add_argument('--momentum', default=0.9, type=float,
-                        help='momentum')
-    parser.add_argument('--weight-decay', default=1e-4, type=float,
-                        help='weight decay')
-    parser.add_argument('--nesterov', default=False, type=str2bool,
-                        help='nesterov')
+    parser.add_argument('--momentum',
+                        default=0.9, type=float, help='momentum')
+    parser.add_argument('--weight-decay',
+                        default=1e-4, type=float, help='weight decay')
+    parser.add_argument('--nesterov',
+                        default=False, type=str2bool, help='nesterov')
 
     args = parser.parse_args()
-
     return args
 
 
@@ -101,31 +92,31 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None):
-    losses = AverageMeter()
-    ious = AverageMeter()
+def train(args, train_loader, model, criterion, optimizer):
+    avg_losses = AverageMeter()
+    avg_ious = AverageMeter()
 
     model.train()
 
-    for i, (input, target) in tqdm(enumerate(train_loader), total=len(train_loader)):
-        input = input.cuda()
+    for inputs, target in tqdm(train_loader):
+        inputs = inputs.cuda()
         target = target.cuda()
 
         # compute output
         if args.deepsupervision:
-            outputs = model(input)
+            outputs = model(inputs)
             loss = 0
             for output in outputs:
                 loss += criterion(output, target)
             loss /= len(outputs)
             iou = iou_score(outputs[-1], target)
         else:
-            output = model(input)
+            output = model(inputs)
             loss = criterion(output, target)
             iou = iou_score(output, target)
 
-        losses.update(loss.item(), input.size(0))
-        ious.update(iou, input.size(0))
+        avg_losses.update(loss.item(), inputs.size(0))
+        avg_ious.update(iou, inputs.size(0))
 
         # compute gradient and do optimizing step
         optimizer.zero_grad()
@@ -133,44 +124,44 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
         optimizer.step()
 
     log = OrderedDict([
-        ('loss', losses.avg),
-        ('iou', ious.avg),
+        ('loss', avg_losses.avg),
+        ('iou', avg_ious.avg),
     ])
 
     return log
 
 
 def validate(args, val_loader, model, criterion):
-    losses = AverageMeter()
-    ious = AverageMeter()
+    avg_losses = AverageMeter()
+    avg_ious = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
 
     with torch.no_grad():
-        for i, (input, target) in tqdm(enumerate(val_loader), total=len(val_loader)):
-            input = input.cuda()
+        for inputs, target in tqdm(val_loader):
+            inputs = inputs.cuda()
             target = target.cuda()
 
             # compute output
             if args.deepsupervision:
-                outputs = model(input)
+                outputs = model(inputs)
                 loss = 0
                 for output in outputs:
                     loss += criterion(output, target)
                 loss /= len(outputs)
                 iou = iou_score(outputs[-1], target)
             else:
-                output = model(input)
+                output = model(inputs)
                 loss = criterion(output, target)
                 iou = iou_score(output, target)
 
-            losses.update(loss.item(), input.size(0))
-            ious.update(iou, input.size(0))
+            avg_losses.update(loss.item(), inputs.size(0))
+            avg_ious.update(iou, inputs.size(0))
 
     log = OrderedDict([
-        ('loss', losses.avg),
-        ('iou', ious.avg),
+        ('loss', avg_losses.avg),
+        ('iou', avg_ious.avg),
     ])
 
     return log
@@ -181,9 +172,10 @@ def main():
 
     if args.name is None:
         if args.deepsupervision:
-            args.name = '%s_%s_wDS' %(args.dataset, args.arch)
+            args.name = '%s_%s_wDS' %(args.img_dataset, args.arch)
         else:
-            args.name = '%s_%s_woDS' %(args.dataset, args.arch)
+            args.name = '%s_%s_woDS' %(args.img_dataset, args.arch)
+
     if not os.path.exists('models/%s' %args.name):
         os.makedirs('models/%s' %args.name)
 
@@ -207,8 +199,8 @@ def main():
     cudnn.benchmark = True
 
     # Data loading code
-    img_paths = glob('input/' + args.dataset + '/images/*')
-    mask_paths = glob('input/' + args.dataset + '/masks/*')
+    img_paths = glob('inputs/' + args.img_dataset + '/*')
+    mask_paths = glob('inputs/' + args.msk_dataset + '/*')
 
     train_img_paths, val_img_paths, train_mask_paths, val_mask_paths = \
         train_test_split(img_paths, mask_paths, test_size=0.2, random_state=41)
@@ -224,11 +216,12 @@ def main():
     if args.optimizer == 'Adam':
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
     elif args.optimizer == 'SGD':
-        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr,
-            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
+        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), 
+                              lr=args.lr, momentum=args.momentum, 
+                              weight_decay=args.weight_decay, nesterov=args.nesterov)
 
-    train_dataset = Dataset(args, train_img_paths, train_mask_paths, args.aug)
-    val_dataset = Dataset(args, val_img_paths, val_mask_paths)
+    train_dataset = Dataset(train_img_paths, train_mask_paths)
+    val_dataset = Dataset(val_img_paths, val_mask_paths)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -253,12 +246,12 @@ def main():
         print('Epoch [%d/%d]' %(epoch, args.epochs))
 
         # train for one epoch
-        train_log = train(args, train_loader, model, criterion, optimizer, epoch)
+        train_log = train(args, train_loader, model, criterion, optimizer)
         # evaluate on validation set
         val_log = validate(args, val_loader, model, criterion)
 
         print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
-            %(train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
+              %(train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
 
         tmp = pd.Series([
             epoch,

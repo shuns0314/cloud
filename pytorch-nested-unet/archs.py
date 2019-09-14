@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-
-from torch import nn
-from torch.nn import functional as F
 import torch
-from torchvision import models
-import torchvision
+from torch import nn
 
 
 class VGGBlock(nn.Module):
@@ -40,7 +36,9 @@ class UNet(nn.Module):
         self.pool = nn.MaxPool2d(2, 2)
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
-        self.conv0_0 = VGGBlock(args.input_channels, nb_filter[0], nb_filter[0])
+        self.conv0_0 = VGGBlock(in_channels=args.input_channels, 
+                                middle_channels=nb_filter[0],
+                                out_channels=nb_filter[0])
         self.conv1_0 = VGGBlock(nb_filter[0], nb_filter[1], nb_filter[1])
         self.conv2_0 = VGGBlock(nb_filter[1], nb_filter[2], nb_filter[2])
         self.conv3_0 = VGGBlock(nb_filter[2], nb_filter[3], nb_filter[3])
@@ -54,8 +52,8 @@ class UNet(nn.Module):
         self.final = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
 
 
-    def forward(self, input):
-        x0_0 = self.conv0_0(input)
+    def forward(self, inputs):
+        x0_0 = self.conv0_0(inputs)
         x1_0 = self.conv1_0(self.pool(x0_0))
         x2_0 = self.conv2_0(self.pool(x1_0))
         x3_0 = self.conv3_0(self.pool(x2_0))
@@ -110,8 +108,8 @@ class NestedUNet(nn.Module):
             self.final = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
 
 
-    def forward(self, input):
-        x0_0 = self.conv0_0(input)
+    def forward(self, inputs):
+        x0_0 = self.conv0_0(inputs)
         x1_0 = self.conv1_0(self.pool(x0_0))
         x0_1 = self.conv0_1(torch.cat([x0_0, self.up(x1_0)], 1))
 
