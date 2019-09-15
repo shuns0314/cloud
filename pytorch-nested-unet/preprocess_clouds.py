@@ -16,7 +16,7 @@ from joblib import Parallel, delayed
 def change_color_and_size(image: np.ndarray) -> np.ndarray:
     """画像を読み込んで、白黒に変換."""
     image = rgb2gray(image)
-    image = image.astype('float32') / 255
+    image = image.astype('float32')
     image = resize(image, (525, 325))
     return image
 
@@ -95,4 +95,4 @@ def main(folder_name: str, pix_csv_path: str, pix_column: int = 1):
 
 
 if __name__ == '__main__':
-    main(folder_name='test_images', pix_csv_path='../data/sample_submission.csv' )
+    main(folder_name='train_images', pix_csv_path='../data/train.csv' )

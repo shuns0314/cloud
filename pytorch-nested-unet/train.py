@@ -13,8 +13,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+from torchvision import transforms
+from torchvision.transforms import ToTensor
 
-from dataset import Dataset
+from dataset import Dataset, Resize
 import archs
 from metrics import dice_coef, batch_iou, mean_iou, iou_score
 import losses
@@ -216,12 +218,16 @@ def main():
     if args.optimizer == 'Adam':
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
     elif args.optimizer == 'SGD':
-        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), 
-                              lr=args.lr, momentum=args.momentum, 
+        optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+                              lr=args.lr, momentum=args.momentum,
                               weight_decay=args.weight_decay, nesterov=args.nesterov)
 
-    train_dataset = Dataset(train_img_paths, train_mask_paths)
-    val_dataset = Dataset(val_img_paths, val_mask_paths)
+    train_dataset = Dataset(img_paths=train_img_paths,
+                            mask_paths=train_mask_paths,
+                            transform=transforms.Compose([Resize()]))
+    val_dataset = Dataset(img_paths=val_img_paths,
+                          mask_paths=val_mask_paths,
+                          transform=transforms.Compose([Resize()]))
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,

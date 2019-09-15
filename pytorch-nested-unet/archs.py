@@ -36,9 +36,10 @@ class UNet(nn.Module):
         self.pool = nn.MaxPool2d(2, 2)
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
-        self.conv0_0 = VGGBlock(in_channels=args.input_channels, 
+        self.conv0_0 = VGGBlock(in_channels=args.input_channels,
                                 middle_channels=nb_filter[0],
                                 out_channels=nb_filter[0])
+        
         self.conv1_0 = VGGBlock(nb_filter[0], nb_filter[1], nb_filter[1])
         self.conv2_0 = VGGBlock(nb_filter[1], nb_filter[2], nb_filter[2])
         self.conv3_0 = VGGBlock(nb_filter[2], nb_filter[3], nb_filter[3])
@@ -75,6 +76,7 @@ class NestedUNet(nn.Module):
         self.args = args
 
         nb_filter = [32, 64, 128, 256, 512]
+        n_classes = 4
 
         self.pool = nn.MaxPool2d(2, 2)
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
@@ -100,12 +102,12 @@ class NestedUNet(nn.Module):
         self.conv0_4 = VGGBlock(nb_filter[0]*4+nb_filter[1], nb_filter[0], nb_filter[0])
 
         if self.args.deepsupervision:
-            self.final1 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-            self.final2 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-            self.final3 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-            self.final4 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
+            self.final1 = nn.Conv2d(nb_filter[0], n_classes, kernel_size=1)
+            self.final2 = nn.Conv2d(nb_filter[0], n_classes, kernel_size=1)
+            self.final3 = nn.Conv2d(nb_filter[0], n_classes, kernel_size=1)
+            self.final4 = nn.Conv2d(nb_filter[0], n_classes, kernel_size=1)
         else:
-            self.final = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
+            self.final = nn.Conv2d(nb_filter[0], n_classes, kernel_size=1)
 
 
     def forward(self, inputs):
