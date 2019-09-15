@@ -18,13 +18,14 @@ from torchvision.transforms import ToTensor
 
 from dataset import Dataset, Resize
 import archs
-from metrics import dice_coef, batch_iou, mean_iou, iou_score
+import metrics
 import losses
 from utils import str2bool, count_params
 
 
 arch_names = list(archs.__dict__.keys())
 loss_names = list(losses.__dict__.keys())
+metric_names = list(metrics.__dict__.keys())
 loss_names.append('BCEWithLogitsLoss')
 
 
@@ -50,15 +51,18 @@ def parse_args():
     parser.add_argument('--loss',
                         default='BCEDiceLoss', choices=loss_names,
                         help='loss: ' + ' | '.join(loss_names) + ' (default: BCEDiceLoss)')
+    parser.add_argument('--metric',
+                        default='Dice_coef', choices=metric_names,
+                        help='metric: ' + ' | '.join(metric_names) + ' (default: Dice_coef)')
     parser.add_argument('--epochs',
                         default=10000, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('--early-stop',
-                        default=20, type=int,
-                        metavar='N', help='early stopping (default: 20)')
+                        default=10, type=int,
+                        metavar='N', help='early stopping (default: 10)')
     parser.add_argument('-b', '--batch-size',
-                        default=16, type=int,
-                        metavar='N', help='mini-batch size (default: 16)')
+                        default=8, type=int,
+                        metavar='N', help='mini-batch size (default: 8)')
     parser.add_argument('--optimizer',
                         default='Adam', choices=['Adam', 'SGD'],
                         help='loss: ' + ' | '.join(['Adam', 'SGD']) + ' (default: Adam)')
@@ -96,8 +100,8 @@ class AverageMeter(object):
 
 def train(args, train_loader, model, criterion, optimizer):
     avg_losses = AverageMeter()
-    avg_ious = AverageMeter()
-
+    avg_metrics = AverageMeter()
+    metric_criterion = metrics.__dict__[args.metric]().cuda()
     model.train()
 
     for inputs, target in tqdm(train_loader):
@@ -111,14 +115,14 @@ def train(args, train_loader, model, criterion, optimizer):
             for output in outputs:
                 loss += criterion(output, target)
             loss /= len(outputs)
-            iou = iou_score(outputs[-1], target)
+            metric = metric_criterion(outputs[-1], target)
         else:
             output = model(inputs)
             loss = criterion(output, target)
-            iou = iou_score(output, target)
+            metric = metric_criterion(output, target)
 
         avg_losses.update(loss.item(), inputs.size(0))
-        avg_ious.update(iou, inputs.size(0))
+        avg_metrics.update(metric, inputs.size(0))
 
         # compute gradient and do optimizing step
         optimizer.zero_grad()
@@ -127,7 +131,7 @@ def train(args, train_loader, model, criterion, optimizer):
 
     log = OrderedDict([
         ('loss', avg_losses.avg),
-        ('iou', avg_ious.avg),
+        ('metric', avg_metrics.avg),
     ])
 
     return log
@@ -135,11 +139,11 @@ def train(args, train_loader, model, criterion, optimizer):
 
 def validate(args, val_loader, model, criterion):
     avg_losses = AverageMeter()
-    avg_ious = AverageMeter()
+    avg_metrics = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
-
+    metric_criterion = metrics.__dict__[args.metric]().cuda()
     with torch.no_grad():
         for inputs, target in tqdm(val_loader):
             inputs = inputs.cuda()
@@ -152,18 +156,18 @@ def validate(args, val_loader, model, criterion):
                 for output in outputs:
                     loss += criterion(output, target)
                 loss /= len(outputs)
-                iou = iou_score(outputs[-1], target)
+                metric = metric_criterion(outputs[-1], target)
             else:
                 output = model(inputs)
                 loss = criterion(output, target)
-                iou = iou_score(output, target)
+                metric = metric_criterion(output, target)
 
             avg_losses.update(loss.item(), inputs.size(0))
-            avg_ious.update(iou, inputs.size(0))
+            avg_metrics.update(metric, inputs.size(0))
 
     log = OrderedDict([
         ('loss', avg_losses.avg),
-        ('iou', avg_ious.avg),
+        ('metric', avg_metrics.avg),
     ])
 
     return log
@@ -243,10 +247,10 @@ def main():
         drop_last=False)
 
     log = pd.DataFrame(index=[], columns=[
-        'epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou'
+        'epoch', 'lr', 'loss', 'metric', 'val_loss', 'val_metric'
     ])
 
-    best_iou = 0
+    best_metric = 0
     trigger = 0
     for epoch in range(args.epochs):
         print('Epoch [%d/%d]' %(epoch, args.epochs))
@@ -256,26 +260,26 @@ def main():
         # evaluate on validation set
         val_log = validate(args, val_loader, model, criterion)
 
-        print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
-              %(train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
+        print('loss %.4f - metric %.4f - val_loss %.4f - val_metric %.4f'
+              %(train_log['loss'], train_log['metric'], val_log['loss'], val_log['metric']))
 
         tmp = pd.Series([
             epoch,
             args.lr,
             train_log['loss'],
-            train_log['iou'],
+            train_log['metric'],
             val_log['loss'],
-            val_log['iou'],
-        ], index=['epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou'])
+            val_log['metric'],
+        ], index=['epoch', 'lr', 'loss', 'metric', 'val_loss', 'val_metric'])
 
         log = log.append(tmp, ignore_index=True)
         log.to_csv('models/%s/log.csv' %args.name, index=False)
 
         trigger += 1
 
-        if val_log['iou'] > best_iou:
+        if val_log['metric'] > best_metric:
             torch.save(model.state_dict(), 'models/%s/model.pth' %args.name)
-            best_iou = val_log['iou']
+            best_metric = val_log['metric']
             print("=> saved best model")
             trigger = 0
 

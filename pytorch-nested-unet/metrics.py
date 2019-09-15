@@ -1,7 +1,7 @@
 import numpy as np
 
 import torch
-import torch.nn.functional as F
+from torch import nn
 
 
 def batch_iou(output, target):
@@ -49,15 +49,19 @@ def iou_score(output, target):
     return (intersection + smooth) / (union + smooth)
 
 
-def dice_coef(output, target):
-    smooth = 1e-5
+class Dice_coef(nn.Module):
+    def __init__(self):
+        super(Dice_coef, self).__init__()
 
-    output = torch.sigmoid(output).view(-1).data.cpu().numpy()
-    target = target.view(-1).data.cpu().numpy()
-    intersection = (output * target).sum()
+    def forward(self, output, target):
+        smooth = 1e-5
 
-    return (2. * intersection + smooth) / \
-        (output.sum() + target.sum() + smooth)
+        output = torch.sigmoid(output).view(-1).data.cpu().numpy()
+        target = target.view(-1).data.cpu().numpy()
+        intersection = (output * target).sum()
+
+        return (2. * intersection + smooth) / \
+            (output.sum() + target.sum() + smooth)
 
 
 def accuracy(output, target):

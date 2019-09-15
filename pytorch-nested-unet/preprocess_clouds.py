@@ -1,6 +1,7 @@
 """Preprocess data."""
 import os
 import warnings
+import argparse
 from typing import Tuple
 from glob import glob
 from datetime import datetime
@@ -13,20 +14,51 @@ from skimage.color import rgb2gray
 from joblib import Parallel, delayed
 
 
-def change_color_and_size(image: np.ndarray) -> np.ndarray:
+def parse_args():
+    """Parser."""
+    today = datetime.now().strftime('%Y%m%d')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name',
+                        default=today,
+                        help='name of folder to be created.\
+                              save format: \
+                              inputs/image_ARGS.NAME and mask_ARGS.NAME\
+                              defalut: TODAY',
+                        type=str)
+    parser.add_argument('--images_folder_path',
+                        help='folder path of images to be preprocessed',
+                        type=str)
+    parser.add_argument('--mask_csv_path',
+                        help='path of csv for encoded mask')
+    parser.add_argument('--mask_column',
+                        default=1,
+                        help='mask_column')
+    parser.add_argument('--glay',
+                        default=False,
+                        help='change color to gray')
+    parser.add_argument('--resize',
+                        default=(525, 325),
+                        type=Tuple[int, int],
+                        help='resize')
+    args = parser.parse_args()
+    return args
+
+
+def change_color_and_size(args, image: np.ndarray) -> np.ndarray:
     """画像を読み込んで、白黒に変換."""
-    image = rgb2gray(image)
+    if args.glay:
+        image = rgb2gray(image)
+
     image = image.astype('float32')
-    image = resize(image, (525, 325))
+    image = resize(image, args.resize)
     return image
 
 
-def convert_pix2img(pix: str) -> np.ndarray:
-    """マスクのstrを読み込んで、白黒のマスクに変換."""
-    mask = rle_decode(pix, (2100, 1400))
+def convert_pix2img(args, mask: str) -> np.ndarray:
+    """マスクのstrを読み込んで、マスク画像に変換."""
+    mask = rle_decode(mask, (2100, 1400))
     mask = mask.astype('float32')
-    mask = resize(mask, (525, 325))
-
+    mask = resize(mask, args.resize)
     return mask
 
 
@@ -52,18 +84,19 @@ def rle_decode(mask_rle: str, shape: Tuple[int, int]):
     return img
 
 
-def main(folder_name: str, pix_csv_path: str, pix_column: int = 1):
+def main():
     """Main process in this module.
 
     folder_name: Anticipating name is 'train_images' or 'test_images' in the folder '../data/'.
     pix_column: マスクのカラム
     """
-    paths = glob('../data/' + folder_name + '/*')
-    today = datetime.now().strftime('%Y%m%d')
-    csv_df = pd.read_csv(pix_csv_path)
+    args = parse_args()
+    paths = glob(args.images_folder_path + '/*')
+    csv_df = pd.read_csv(args.mask_csv_path)
+    mask_column = args.mask_column
 
-    img_folder_path = 'inputs/' + folder_name + '_' + today
-    mask_folder_path = 'inputs/' + folder_name + '_mask_' + today
+    img_folder_path = f'inputs/image_{args.name}'
+    mask_folder_path = f'inputs/mask_{args.name}'
 
     # Create the folder of save.
     if not os.path.exists(img_folder_path):
@@ -78,14 +111,14 @@ def main(folder_name: str, pix_csv_path: str, pix_column: int = 1):
             # for image
             path = paths[idx]
             image = imread(path)
-            image = change_color_and_size(image)
+            image = change_color_and_size(args, image)
             file_name = 'img_' + path[-11:-4] + '.npy'
             np.save(img_folder_path + '/' + file_name, image)
 
             # for mask
             mask_list = []
             for mask_idx in range(4*idx, 4*idx+4):
-                mask = convert_pix2img(pix=csv_df.iloc[mask_idx, pix_column])
+                mask = convert_pix2img(args, mask=csv_df.iloc[mask_idx, mask_column])
                 mask_list.append(mask)
             mask = np.stack(mask_list)
             file_name = 'msk_' + path[-11:-4] + '.npy'
@@ -95,4 +128,4 @@ def main(folder_name: str, pix_csv_path: str, pix_column: int = 1):
 
 
 if __name__ == '__main__':
-    main(folder_name='train_images', pix_csv_path='../data/train.csv' )
+    main()

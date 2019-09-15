@@ -1,0 +1,16 @@
+name: train_images_20190915_NestedUNet_woDS
+arch: NestedUNet
+deepsupervision: False
+img_dataset: train_images_20190915
+msk_dataset: train_images_mask_20190915
+input_channels: 1
+aug: False
+loss: BCEDiceLoss
+epochs: 10000
+early_stop: 20
+batch_size: 8
+optimizer: Adam
+lr: 0.0003
+momentum: 0.9
+weight_decay: 0.0001
+nesterov: False
