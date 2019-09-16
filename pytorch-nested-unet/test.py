@@ -3,24 +3,13 @@
 import os
 import argparse
 from glob import glob
-from collections import OrderedDict
 import warnings
 
 import joblib
 import numpy as np
 from tqdm import tqdm
-from sklearn.model_selection import train_test_split
 from skimage.io import imread, imsave
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-import torch.optim as optim
-from torch.optim import lr_scheduler
-from torch.utils.data import DataLoader
-import torch.backends.cudnn as cudnn
-import torchvision
-from torchvision import datasets, models, transforms
 
 from dataset import Dataset
 import archs
@@ -76,15 +65,15 @@ def main():
         warnings.simplefilter('ignore')
 
         with torch.no_grad():
-            for i, (input, target) in tqdm(enumerate(val_loader), total=len(val_loader)):
-                input = input.cuda()
+            for i, (inputs, target) in enumerate(tqdm(test_loader)):
+                inputs = inputs.cuda()
                 target = target.cuda()
 
                 # compute output
                 if args.deepsupervision:
-                    output = model(input)[-1]
+                    output = model(inputs)[-1]
                 else:
-                    output = model(input)
+                    output = model(inputs)
 
                 output = torch.sigmoid(output).data.cpu().numpy()
                 img_paths = val_img_paths[args.batch_size*i:args.batch_size*(i+1)]

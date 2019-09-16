@@ -14,13 +14,13 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torchvision import transforms
-from torchvision.transforms import ToTensor
 
-from dataset import Dataset, Resize
+from dataset import Dataset
 import archs
 import metrics
 import losses
 from utils import str2bool, count_params
+from data_augmentation import *
 
 
 arch_names = list(archs.__dict__.keys())
@@ -47,7 +47,8 @@ def parse_args():
     parser.add_argument('--input-channels',
                         default=3, type=int, help='input channels')
     parser.add_argument('--aug',
-                        default=False, type=str2bool)
+                        default=False, type=bool,
+                        help='data augmentation')
     parser.add_argument('--loss',
                         default='BCEDiceLoss', choices=loss_names,
                         help='loss: ' + ' | '.join(loss_names) + ' (default: BCEDiceLoss)')
@@ -61,8 +62,8 @@ def parse_args():
                         default=10, type=int,
                         metavar='N', help='early stopping (default: 10)')
     parser.add_argument('-b', '--batch-size',
-                        default=8, type=int,
-                        metavar='N', help='mini-batch size (default: 8)')
+                        default=16, type=int,
+                        metavar='N', help='mini-batch size (default: 12)')
     parser.add_argument('--optimizer',
                         default='Adam', choices=['Adam', 'SGD'],
                         help='loss: ' + ' | '.join(['Adam', 'SGD']) + ' (default: Adam)')
@@ -226,12 +227,14 @@ def main():
                               lr=args.lr, momentum=args.momentum,
                               weight_decay=args.weight_decay, nesterov=args.nesterov)
 
-    train_dataset = Dataset(img_paths=train_img_paths,
+    train_dataset = Dataset(args=args,
+                            img_paths=train_img_paths,
                             mask_paths=train_mask_paths,
-                            transform=transforms.Compose([Resize()]))
-    val_dataset = Dataset(img_paths=val_img_paths,
-                          mask_paths=val_mask_paths,
-                          transform=transforms.Compose([Resize()]))
+                            train=True)
+
+    val_dataset = Dataset(args=args,
+                          img_paths=val_img_paths,
+                          mask_paths=val_mask_paths)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -239,6 +242,7 @@ def main():
         shuffle=True,
         pin_memory=True,
         drop_last=True)
+    
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.batch_size,
