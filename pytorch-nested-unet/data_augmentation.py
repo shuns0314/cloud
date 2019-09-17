@@ -29,7 +29,7 @@ class RandomCrop(object):
 
 class HorizontalFlip(object):
     def __call__(self, image):
-        image = image[:, :, ::-1]
+        image = image[::-1, :, :]
         return image
 
 

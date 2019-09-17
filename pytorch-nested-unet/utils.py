@@ -21,5 +21,6 @@ def plot_loss_curve(path):
     loss_df = pd.read_csv(path)
     loss_df = loss_df.iloc[:, 2:]
     loss_df.plot()
+    plt.grid()
     plt.show()
 
