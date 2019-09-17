@@ -43,44 +43,66 @@ class Dataset(torch.utils.data.Dataset):
 
         # 普通にdatasetのtransformでimageとmaskをランダムでtransformかけようとすると、
         # imageとmaskそれぞれにrandomがかかるっぽい。
+        holizon = HorizontalFlip()
+        vertical = VerticalFlip()
         if self.args.aug and self.train:
-            if np.random.random() < 0.5:
-                holizon = HorizontalFlip()
-                image = holizon(image)
-                mask = holizon(mask)
-
-            if np.random.random() < 0.5:
-                vertical = VerticalFlip()
-                image = vertical(image)
-                mask = vertical(mask)
-
-            if np.random.random() < 0.5:
-                angle = np.random.randint(*(0, 180))
-                image = image.transpose(1, 2, 0) # channelを後ろに持ってくる
-                image = rotate(image, angle)
-                mask = mask.transpose(1, 2, 0)
-                mask = rotate(mask, angle)
- 
-                image = resize(image.transpose(2, 0, 1))
-                mask = resize(mask.transpose(2, 0, 1))
             
-            # Random crop
-            if np.random.random() < 0.5:
-                _, width, height = image.shape
-                crop_size = (192, 192)
-                left = np.random.randint(0, width - crop_size[1])
-                top = np.random.randint(0, height - crop_size[0])
+            #Don't augment data of 20%
+            if np.random.random() < 0.8:
+                # HorizonFlip
+                if np.random.random() < 0.5:
+                    image = holizon(image)
+                    mask = holizon(mask)
+                
+                # VerticalFlip
+                if np.random.random() < 0.5:
+                    vertical = VerticalFlip()
+                    image = vertical(image)
+                    mask = vertical(mask)
 
-                bottom = top + crop_size[0]
-                right = left + crop_size[1]
+                # Rotation
+                if np.random.random() < 0.5:
+                    angle = np.random.randint(*(0, 180))
+                    image = image.transpose(1, 2, 0) # channelを後ろに持ってくる
+                    image = rotate(image, angle)
+                    mask = mask.transpose(1, 2, 0)
+                    mask = rotate(mask, angle)
+    
+                    image = resize(image.transpose(2, 0, 1))
+                    mask = resize(mask.transpose(2, 0, 1))
+                
+                # Random crop
+                if np.random.random() < 0.5:
+                    _, width, height = image.shape
+                    crop_size = (192, 192)
+                    left = np.random.randint(0, width - crop_size[1])
+                    top = np.random.randint(0, height - crop_size[0])
 
-                image = image[:, left:right, top:bottom]
-                image = resize(image)
-                mask = mask[:, left:right, top:bottom]
-                mask = resize(mask)
+                    bottom = top + crop_size[0]
+                    right = left + crop_size[1]
 
-            if np.random.random() < 0.5:
-                _, width, height = 
+                    image = image[:, left:right, top:bottom]
+                    image = resize(image)
+                    mask = mask[:, left:right, top:bottom]
+                    mask = resize(mask)
+
+                # Mask
+                if np.random.random() < 0.5:
+                    n_classes = 4
+                    mask_channnel = np.random.randint(0, n_classes)
+                    left = np.where(mask[mask_channnel, :, :].mean(axis=1) > 0.2)[0][0]
+                    right = np.where(mask[mask_channnel, :, :].mean(axis=1) > 0.2)[0][-1]
+                    top = np.where(mask[mask_channnel, :, :].mean(axis=0) > 0.2)[0][0]
+                    bottom = np.where(mask[mask_channnel, :, :].mean(axis=0) > 0.2)[0][-1]
+
+                    if np.random.random() < 0.5:
+                        crop_image = image[left:right, top:bottom, :]
+                        crop_image = vertical(crop_image)
+                    else:
+                        crop_image = image[left:right, top:bottom, :]
+                        crop_image = holizon(crop_image)
+
+                    image[left:right, top:bottom, :] = crop_image
 
         image = torch.from_numpy(image.copy())
         mask = torch.from_numpy(mask.copy())
