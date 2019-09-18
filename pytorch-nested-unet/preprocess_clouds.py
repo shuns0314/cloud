@@ -54,9 +54,9 @@ def change_color_and_size(args, image: np.ndarray) -> np.ndarray:
     return image
 
 
-def convert_pix2img(args, mask: str) -> np.ndarray:
+def convert_pix2img(args, encoded_mask: str) -> np.ndarray:
     """マスクのstrを読み込んで、マスク画像に変換."""
-    mask = rle_decode(mask, (2100, 1400))
+    mask = rle_decode(encoded_mask, (2100, 1400))
     mask = mask.astype('float32')
     mask = resize(mask, args.resize)
     return mask
@@ -118,7 +118,8 @@ def main():
             # for mask
             mask_list = []
             for mask_idx in range(4*idx, 4*idx+4):
-                mask = convert_pix2img(args, mask=csv_df.iloc[mask_idx, mask_column])
+                mask = convert_pix2img(args, 
+                                       encoded_mask=csv_df.iloc[mask_idx, mask_column])
                 mask_list.append(mask)
             mask = np.stack(mask_list)
             file_name = 'msk_' + path[-11:-4] + '.npy'

@@ -45,15 +45,15 @@ class Dataset(torch.utils.data.Dataset):
         # imageとmaskそれぞれにrandomがかかるっぽい。
         holizon = HorizontalFlip()
         vertical = VerticalFlip()
+
         if self.args.aug and self.train:
-            
             #Don't augment data of 20%
             if np.random.random() < 0.8:
                 # HorizonFlip
                 if np.random.random() < 0.5:
                     image = holizon(image)
                     mask = holizon(mask)
-                
+
                 # VerticalFlip
                 if np.random.random() < 0.5:
                     vertical = VerticalFlip()
@@ -67,10 +67,10 @@ class Dataset(torch.utils.data.Dataset):
                     image = rotate(image, angle)
                     mask = mask.transpose(1, 2, 0)
                     mask = rotate(mask, angle)
-    
+
                     image = resize(image.transpose(2, 0, 1))
                     mask = resize(mask.transpose(2, 0, 1))
-                
+
                 # Random crop
                 if np.random.random() < 0.5:
                     _, width, height = image.shape
