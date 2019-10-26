@@ -10,6 +10,7 @@ except ImportError: # py3k
     from itertools import  filterfalse as ifilterfalse
 
 
+
 class BCEDiceLoss(nn.Module):
     def __init__(self):
         super(BCEDiceLoss, self).__init__()
@@ -32,8 +33,8 @@ class LovaszHingeLoss(nn.Module):
         super(LovaszHingeLoss, self).__init__()
 
     def forward(self, inputs, target):
-        # inputs = inputs.squeeze(1)
-        # target = target.squeeze(1)
+        inputs = inputs.squeeze(1)
+        target = target.squeeze(1)
         loss = lovasz_hinge(inputs, target, per_image=True)
         return loss
 
@@ -230,3 +231,36 @@ def mean(l, ignore_nan=False, empty=0):
     if n == 1:
         return acc
     return acc / n
+
+
+def one_hot(index, classes):
+    size = index.size() + (classes,)
+    view = index.size() + (1,)
+
+    mask = torch.Tensor(*size).fill_(0)
+    index = index.view(*view)
+    ones = 1.
+
+    if isinstance(index, Variable):
+        ones = Variable(torch.Tensor(index.size()).fill_(1))
+        mask = Variable(mask, volatile=index.volatile)
+
+    return mask.scatter_(1, index, ones)
+
+
+class FocalLoss(nn.Module):
+
+    def __init__(self, gamma=0, eps=1e-7):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.eps = eps
+
+    def forward(self, inputs, target):
+        y = one_hot(target, inputs.size(-1))
+        logit = F.softmax(inputs, dim=-1)
+        logit = logit.clamp(self.eps, 1. - self.eps)
+
+        loss = -1 * y * torch.log(logit) # cross entropy
+        loss = loss * (1 - logit) ** self.gamma # focal loss
+
+        return loss.sum()

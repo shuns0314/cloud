@@ -3,3 +3,11 @@ data
 *.npy
 *.pyc
 .ipynb_checkpoints
+/pytorch-nested-unet/inputs/*
+/pytorch-nested-unet/models/*/*.pth
+/pytorch-nested-unet/models/*/*.pkl
+/pytorch-nested-unet/__pycache__/*
+*.png
+*.jpg
+model.pth
+*.pth

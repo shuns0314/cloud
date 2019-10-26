@@ -10,6 +10,7 @@ from scipy.ndimage.interpolation import rotate
 
 from data_augmentation import *
 
+
 class Dataset(torch.utils.data.Dataset):
     """マスクの生成→データセット"""
     def __init__(self,
@@ -31,79 +32,67 @@ class Dataset(torch.utils.data.Dataset):
         resize = Resize()
 
         image = np.load(img_path)
-        image = image.astype('float32') / 255
+        image = image.astype('float32') / image.max()
         if len(image.shape) == 2:
             image = np.reshape(image, [image.shape[0], image.shape[1], 1])
         image = image.transpose(2, 0, 1) # (channel, width, height) に変換
         image = resize(image)
 
         mask = np.load(mask_path) # (channel, width, height) になってる
-        mask = mask.astype('float32')
+        mask = mask.astype('uint8')
         mask = resize(mask)
 
         # 普通にdatasetのtransformでimageとmaskをランダムでtransformかけようとすると、
         # imageとmaskそれぞれにrandomがかかるっぽい。
-        holizon = HorizontalFlip()
-        vertical = VerticalFlip()
         if self.args.aug and self.train:
-            
-            #Don't augment data of 20%
-            if np.random.random() < 0.8:
+            # Data augmentation of position
+            # Don't augment data of twenty percent.
+            random_num = np.random.random()
+
+            # Random crop or Move
+            if random_num < 0.5:
+                move = Move(rate=0.6, max_move_rate=0.1)
+                image, mask = move(image, mask)
+            else:
+                random_crop = RandomCrop(rate=0.6, crop_size=(192, 192))
+                image, mask = random_crop(image, mask)
+
+            random_num = np.random.random()
+
+            if random_num > 0.8:
                 # HorizonFlip
-                if np.random.random() < 0.5:
-                    image = holizon(image)
-                    mask = holizon(mask)
-                
+                horizon_flip = RandomFlip(axis="horizon", rate=0.6)
+                image, mask = horizon_flip(image, mask)
+
                 # VerticalFlip
-                if np.random.random() < 0.5:
-                    vertical = VerticalFlip()
-                    image = vertical(image)
-                    mask = vertical(mask)
+                vertical_flip = RandomFlip(axis="vertical", rate=0.6)
+                image, mask = vertical_flip(image, mask)
 
+            elif random_num > 0.6:
                 # Rotation
-                if np.random.random() < 0.5:
-                    angle = np.random.randint(*(0, 180))
-                    image = image.transpose(1, 2, 0) # channelを後ろに持ってくる
-                    image = rotate(image, angle)
-                    mask = mask.transpose(1, 2, 0)
-                    mask = rotate(mask, angle)
-    
-                    image = resize(image.transpose(2, 0, 1))
-                    mask = resize(mask.transpose(2, 0, 1))
-                
-                # Random crop
-                if np.random.random() < 0.5:
-                    _, width, height = image.shape
-                    crop_size = (192, 192)
-                    left = np.random.randint(0, width - crop_size[1])
-                    top = np.random.randint(0, height - crop_size[0])
+                random_rotate = RandomRotation(rate=0.8, angle_range=(0, 30))
+                image, mask = random_rotate(image, mask)
 
-                    bottom = top + crop_size[0]
-                    right = left + crop_size[1]
+            elif random_num > 0.4:
+                # Bounding only horizon or vertical flip
+                bounding_only = BoundingOnlyDA(rate=0.8, classes=self.args.n_classes)
+                image, mask = bounding_only(image, mask)
 
-                    image = image[:, left:right, top:bottom]
-                    image = resize(image)
-                    mask = mask[:, left:right, top:bottom]
-                    mask = resize(mask)
+            elif random_num > 0.2:
+                # CutOff
+                cutoff = CutOff(mask_size=(50, 100), rate=0.8)
+                image, mask = cutoff(image, mask)
 
-                # Mask
-                if np.random.random() < 0.5:
-                    n_classes = 4
-                    mask_channnel = np.random.randint(0, n_classes)
-                    left = np.where(mask[mask_channnel, :, :].mean(axis=1) > 0.2)[0][0]
-                    right = np.where(mask[mask_channnel, :, :].mean(axis=1) > 0.2)[0][-1]
-                    top = np.where(mask[mask_channnel, :, :].mean(axis=0) > 0.2)[0][0]
-                    bottom = np.where(mask[mask_channnel, :, :].mean(axis=0) > 0.2)[0][-1]
+            # Data augmentation of brightness
+            # adjust_gamma = Adjust_gamma(rate=0.7, gamma_range=(0.7, 1))
+            # image = adjust_gamma(image)
 
-                    if np.random.random() < 0.5:
-                        crop_image = image[left:right, top:bottom, :]
-                        crop_image = vertical(crop_image)
-                    else:
-                        crop_image = image[left:right, top:bottom, :]
-                        crop_image = holizon(crop_image)
+            # Equalize_hist
+            # equalize = Equalize(rate=0.2)
+            # image = equalize(image)
 
-                    image[left:right, top:bottom, :] = crop_image
 
-        image = torch.from_numpy(image.copy())
-        mask = torch.from_numpy(mask.copy())
+        image = torch.from_numpy(image.copy().astype(np.float32))
+        mask = torch.from_numpy(mask.copy().astype(np.float32))
+
         return image, mask
