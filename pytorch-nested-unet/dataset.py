@@ -64,6 +64,7 @@ class Dataset(torch.utils.data.Dataset):
                 horizon_flip = RandomFlip(axis="horizon", rate=0.6)
                 image, mask = horizon_flip(image, mask)
 
+
                 # VerticalFlip
                 vertical_flip = RandomFlip(axis="vertical", rate=0.6)
                 image, mask = vertical_flip(image, mask)

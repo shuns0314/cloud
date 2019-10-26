@@ -232,7 +232,7 @@ def mean(l, ignore_nan=False, empty=0):
         return acc
     return acc / n
 
-
+  
 def one_hot(index, classes):
     size = index.size() + (classes,)
     view = index.size() + (1,)
@@ -264,3 +264,4 @@ class FocalLoss(nn.Module):
         loss = loss * (1 - logit) ** self.gamma # focal loss
 
         return loss.sum()
+

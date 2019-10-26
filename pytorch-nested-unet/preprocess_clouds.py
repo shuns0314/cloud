@@ -60,9 +60,11 @@ def change_color_and_size(args, image: np.ndarray) -> np.ndarray:
     return image
 
 
-def convert_pix2img(args, mask: str) -> np.ndarray:
+def convert_pix2img(args, encoded_mask: str) -> np.ndarray:
     """マスクのstrを読み込んで、マスク画像に変換."""
+
     mask = rle_decode(mask, (1400, 2100))
+
     mask = mask.astype('float32')
     mask = resize(mask, args.resize)
 
@@ -146,6 +148,7 @@ def main():
                 mask = np.stack(mask_list)
                 file_name = 'msk_' + path[-11:-4] + '.npy'
                 np.save(mask_folder_path + '/' + file_name, mask)
+
 
         Parallel(n_jobs=-1, verbose=10)([delayed(save_process)(idx) for idx in range(len(paths))])
 
