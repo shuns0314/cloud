@@ -1,0 +1,21 @@
+name: 20190919_ResNext50WithNestedUNet_03
+arch: ResNext50NestedUNet
+deepsupervision: False
+img_dataset: image_train_color_0915
+msk_dataset: mask_train_color_0915
+input_channels: 3
+aug: True
+loss: BCEDiceLoss
+metric: Dice_coef
+epochs: 10000
+early_stop: 10
+batch_size: 8
+optimizer: Adam
+lr: 0.001
+momentum: 0.9
+weight_decay: 0.0001
+nesterov: False
+n_classes: 4
+scheduler: CosineAnnealingLR
+
+# CutOffのコードが機能していない。
